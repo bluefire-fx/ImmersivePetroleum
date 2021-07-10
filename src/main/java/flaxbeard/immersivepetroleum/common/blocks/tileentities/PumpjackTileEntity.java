@@ -209,8 +209,8 @@ public class PumpjackTileEntity extends PoweredMultiblockTileEntity<PumpjackTile
 							active = true;
 						}
 					}
-					if(active)
-					{
+					
+					if(active){
 						this.energyStorage.extractEnergy(consumption, false);
 					}
 					this.activeTicks++;
