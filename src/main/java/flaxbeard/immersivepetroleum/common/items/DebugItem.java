@@ -24,6 +24,7 @@ import flaxbeard.immersivepetroleum.common.blocks.tileentities.PumpjackTileEntit
 import flaxbeard.immersivepetroleum.common.entity.MotorboatEntity;
 import flaxbeard.immersivepetroleum.common.network.IPPacketHandler;
 import flaxbeard.immersivepetroleum.common.network.MessageDebugSync;
+import flaxbeard.immersivepetroleum.common.particle.IPParticleTypes;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.util.ITooltipFlag;
 import net.minecraft.entity.player.PlayerEntity;
@@ -52,6 +53,26 @@ import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fml.common.Mod;
 
 public class DebugItem extends IPItemBase{
+	protected static enum Modes{
+		DISABLED("Disabled"),
+		INFO_SPEEDBOAT("Info: Speedboat."),
+		INFO_TE_AUTOLUBE("Info: AutoLubricator."),
+		INFO_TE_GASGEN("Info: Portable Generator."),
+		INFO_TE_MULTIBLOCK("Info: Powered Multiblock."),
+		INFO_TE_DISTILLATION_TOWER("Info: Distillation Tower."),
+		RESERVOIR("Create/Get Reservoir"),
+		RESERVOIR_BIG_SCAN("Scan 5 Block Radius Area"),
+		CLEAR_RESERVOIR_CACHE("Clear Reservoir Cache"),
+		REFRESH_ALL_IPMODELS("Refresh all IPModels"),
+		GENERAL_TEST("You may not want to trigger this.")
+		;
+		
+		public final String display;
+		private Modes(String display){
+			this.display = display;
+		}
+	}
+	
 	public DebugItem(){
 		super("debug");
 	}
@@ -128,7 +149,7 @@ public class DebugItem extends IPItemBase{
 					PumpjackHandler.reservoirsCache.clear();
 					PumpjackHandler.recalculateChances();
 					
-					IPSaveData.setDirty();
+					IPSaveData.markInstanceAsDirty();
 					
 					playerIn.sendStatusMessage(new StringTextComponent("Cleared Oil Cache. (Removed " + contentSize + ")"), true);
 					
@@ -191,13 +212,21 @@ public class DebugItem extends IPItemBase{
 		TileEntity te = context.getWorld().getTileEntity(context.getPos());
 		switch(mode){
 			case GENERAL_TEST:{
-				if(context.getWorld().isRemote){
+				World world = context.getWorld();
+				if(world.isRemote){
 					// Client
+					BlockPos pos = context.getPos();
+
+					float xa = 0.0625F * (float) Math.random();
+					float ya = 0.0625F;
+					float za = 0.0625F * (float) Math.random();
+					
+					world.addParticle(IPParticleTypes.FLARE_FIRE, true, pos.getX() + 0.5, pos.getY() + 1.5, pos.getZ() + 0.5, xa, ya, za);
 				}else{
 					// Server
 				}
 				
-				return ActionResultType.PASS;
+				return ActionResultType.SUCCESS;
 			}
 			case INFO_TE_DISTILLATION_TOWER:{
 				if(te instanceof DistillationTowerTileEntity && !context.getWorld().isRemote){
@@ -414,26 +443,6 @@ public class DebugItem extends IPItemBase{
 					}
 				}
 			}
-		}
-	}
-	
-	protected static enum Modes{
-		DISABLED("Disabled"),
-		INFO_SPEEDBOAT("Info: Speedboat."),
-		INFO_TE_AUTOLUBE("Info: AutoLubricator."),
-		INFO_TE_GASGEN("Info: Portable Generator."),
-		INFO_TE_MULTIBLOCK("Info: Powered Multiblock."),
-		INFO_TE_DISTILLATION_TOWER("Info: Distillation Tower."),
-		RESERVOIR("Create/Get Reservoir"),
-		RESERVOIR_BIG_SCAN("Scan 5 Block Radius Area"),
-		CLEAR_RESERVOIR_CACHE("Clear Reservoir Cache"),
-		REFRESH_ALL_IPMODELS("Refresh all IPModels"),
-		GENERAL_TEST("You may not want to trigger this.")
-		;
-		
-		public final String display;
-		private Modes(String display){
-			this.display = display;
 		}
 	}
 }

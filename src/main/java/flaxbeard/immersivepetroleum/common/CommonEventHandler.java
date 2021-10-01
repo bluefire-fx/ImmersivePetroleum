@@ -59,18 +59,17 @@ import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 public class CommonEventHandler{
-	
 	@SubscribeEvent
 	public void onSave(WorldEvent.Save event){
 		if(!event.getWorld().isRemote()){
-			IPSaveData.setDirty();
+			IPSaveData.markInstanceAsDirty();
 		}
 	}
 	
 	@SubscribeEvent
 	public void onUnload(WorldEvent.Unload event){
 		if(!event.getWorld().isRemote()){
-			IPSaveData.setDirty();
+			IPSaveData.markInstanceAsDirty();
 		}
 	}
 	

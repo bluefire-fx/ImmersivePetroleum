@@ -1,60 +1,76 @@
 package flaxbeard.immersivepetroleum.common.blocks.tileentities;
 
 import java.util.List;
-import java.util.Random;
 
+import blusunrize.immersiveengineering.ImmersiveEngineering;
+import blusunrize.immersiveengineering.common.blocks.IEBlockInterfaces.ISoundTile;
 import flaxbeard.immersivepetroleum.api.crafting.FlarestackHandler;
 import flaxbeard.immersivepetroleum.common.IPTileTypes;
+import flaxbeard.immersivepetroleum.common.particle.IPParticleTypes;
+import flaxbeard.immersivepetroleum.common.util.sounds.IPSounds;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.nbt.CompoundNBT;
 import net.minecraft.particles.ParticleTypes;
 import net.minecraft.tileentity.ITickableTileEntity;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.DamageSource;
 import net.minecraft.util.Direction;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.util.LazyOptional;
+import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidHandler.FluidAction;
 import net.minecraftforge.fluids.capability.templates.FluidTank;
 
-public class FlarestackTileEntity extends IPTileEntityBase implements ITickableTileEntity{
+public class FlarestackTileEntity extends IPTileEntityBase implements ITickableTileEntity, ISoundTile{
+	static final DamageSource FLARESTACK = new DamageSource("ipFlarestack").setDamageBypassesArmor().setFireDamage();
+	
+	protected boolean isRedstoneInverted;
 	protected boolean isActive;
-	protected FluidTank tank = new FluidTank(1000, fstack -> (fstack != null && FlarestackHandler.isBurnable(fstack)));
+	protected short drained;
+	protected FluidTank tank = new FluidTank(250, fstack -> (fstack != FluidStack.EMPTY && FlarestackHandler.isBurnable(fstack)));
 	
 	public FlarestackTileEntity(){
 		super(IPTileTypes.FLARE.get());
+	}
+	
+	public void invertRedstone(){
+		this.isRedstoneInverted = !this.isRedstoneInverted;
+		this.markDirty();
+	}
+	
+	public boolean isRedstoneInverted(){
+		return this.isRedstoneInverted;
 	}
 	
 	public boolean isActive(){
 		return this.isActive;
 	}
 	
+	public short getFlow(){
+		return this.drained;
+	}
+	
 	@Override
 	public void readCustom(BlockState state, CompoundNBT nbt){
+		this.isRedstoneInverted = nbt.getBoolean("inverted");
 		this.isActive = nbt.getBoolean("active");
+		this.drained = nbt.getShort("drained");
 		this.tank.readFromNBT(nbt.getCompound("tank"));
 	}
 	
 	@Override
-	public void writeCustom(CompoundNBT compound){
-		compound.putBoolean("active", this.isActive);
+	public void writeCustom(CompoundNBT nbt){
+		nbt.putBoolean("inverted", this.isRedstoneInverted);
+		nbt.putBoolean("active", this.isActive);
+		nbt.putShort("drained", this.drained);
+		
 		CompoundNBT tank = this.tank.writeToNBT(new CompoundNBT());
-		compound.put("tank", tank);
-	}
-	
-	public void readTank(CompoundNBT nbt){
-		this.tank.readFromNBT(nbt.getCompound("tank"));
-	}
-	
-	public void writeTank(CompoundNBT nbt, boolean toItem){
-		boolean write = this.tank.getFluidAmount() > 0;
-		CompoundNBT tankTag = this.tank.writeToNBT(new CompoundNBT());
-		if(!toItem || write)
-			nbt.put("tank", tankTag);
+		nbt.put("tank", tank);
 	}
 	
 	private LazyOptional<IFluidHandler> inputHandler;
@@ -104,55 +120,54 @@ public class FlarestackTileEntity extends IPTileEntityBase implements ITickableT
 	@Override
 	public void tick(){
 		if(this.world.isRemote){
-			if(this.world.getGameTime() % 4 == 0){
-				if(this.isActive){
-					Random lastRand = new Random((int) Math.floor(this.world.getGameTime() / 20F));
-					Random thisRand = new Random((int) Math.ceil(this.world.getGameTime() / 20F));
+			ImmersiveEngineering.proxy.handleTileSound(IPSounds.FLARESTACK, this, this.isActive, 1.0F, 0.75F);
+			if(this.isActive){
+				if(this.world.getGameTime() % 2 == 0){
+					float xPos = (this.pos.getX() + 0.50F) + (this.world.rand.nextFloat() - 0.5F) * .4375F;
+					float zPos = (this.pos.getZ() + 0.50F) + (this.world.rand.nextFloat() - 0.5F) * .4375F;
+					float yPos = (this.pos.getY() + 1.875F) + (0.2F * this.world.rand.nextFloat());
 					
-					float lastDirection = lastRand.nextFloat() * 360;
-					float thisDirection = thisRand.nextFloat() * 360;
-					float interpDirection = (thisDirection - lastDirection) * ((this.world.getGameTime() % 20) / 20F) + lastDirection;
-					float xSpeed = (float) Math.sin(interpDirection) * .1F;
-					float zSpeed = (float) Math.cos(interpDirection) * .1F;
-					
-					for(int i = 0;i < 10;i++){
-						float xPos = (this.pos.getX() + 0.50F) + (this.world.rand.nextFloat() - 0.5F) * .4375F;
-						float zPos = (this.pos.getZ() + 0.50F) + (this.world.rand.nextFloat() - 0.5F) * .4375F;
-						float yPos = (this.pos.getY() + 1.875F) + (this.world.rand.nextFloat() - 0.5F) * 1.0F;
-						
-						this.world.addParticle(ParticleTypes.FLAME, xPos, yPos, zPos, xSpeed, .2f, zSpeed);
-						if(Math.random() <= 0.1){
-							this.world.addParticle(ParticleTypes.LARGE_SMOKE, xPos, yPos, zPos, xSpeed, .15f, zSpeed);
-						}
-					}
-				}else{
-					float xPos = this.pos.getX() + 0.50F + (this.world.rand.nextFloat() - 0.5F) * .4375F;
-					float zPos = this.pos.getZ() + 0.50F + (this.world.rand.nextFloat() - 0.5F) * .4375F;
-					float yPos = this.pos.getY() + 1.6F;
-					float xa = (this.world.rand.nextFloat() - .5F) * .00625F;
-					float ya = (this.world.rand.nextFloat() - .5F) * .00625F;
-					
-					this.world.addParticle(ParticleTypes.FLAME, xPos, yPos, zPos, xa, .025f, ya);
+					this.world.addParticle(IPParticleTypes.FLARE_FIRE, xPos, yPos, zPos, 0.0, 0.0625F + (this.drained / (float) this.tank.getCapacity() * 0.125F), 0.0);
 				}
+				
+			}else if(this.world.getGameTime() % 5 == 0){
+				float xPos = this.pos.getX() + 0.50F + (this.world.rand.nextFloat() - 0.5F) * .4375F;
+				float zPos = this.pos.getZ() + 0.50F + (this.world.rand.nextFloat() - 0.5F) * .4375F;
+				float yPos = this.pos.getY() + 1.6F;
+				float xa = (this.world.rand.nextFloat() - .5F) * .00625F;
+				float ya = (this.world.rand.nextFloat() - .5F) * .00625F;
+				
+				this.world.addParticle(ParticleTypes.FLAME, xPos, yPos, zPos, xa, 0.025F, ya);
 			}
 		}else{
 			boolean lastActive = this.isActive;
 			this.isActive = false;
-			if(!this.world.isBlockPowered(this.pos) && this.tank.getFluidAmount() > 0){
-				if(this.tank.drain(100, FluidAction.EXECUTE).getAmount() > 0){
+			
+			int redstone = this.world.getRedstonePowerFromNeighbors(this.pos);
+			if(this.isRedstoneInverted()){
+				redstone = 15 - redstone;
+			}
+			
+			if(redstone > 0 && this.tank.getFluidAmount() > 0){
+				float signal = redstone / 15F;
+				FluidStack fs = this.tank.drain((int) (this.tank.getCapacity() * signal), FluidAction.SIMULATE);
+				if(fs.getAmount() > 0){
+					this.tank.drain(fs.getAmount(), FluidAction.EXECUTE);
+					this.drained = (short) fs.getAmount();
 					this.isActive = true;
 				}
 			}
 			
 			if(this.isActive && this.world.getGameTime() % 10 == 0){
-				// Set anything ablaze that's in the danger zone
+				// Set *anything* ablaze that's in the danger zone
 				BlockPos min = this.pos.add(-1, 2, -1);
 				BlockPos max = min.add(3, 3, 3);
 				List<Entity> list = this.getWorld().getEntitiesWithinAABB(Entity.class, new AxisAlignedBB(min, max));
 				if(!list.isEmpty()){
 					list.forEach(e -> {
 						if(!e.isImmuneToFire()){
-							e.setFire(8);
+							e.setFire(15);
+							e.attackEntityFrom(FLARESTACK, 6.0F * (this.drained / (float) this.tank.getCapacity()));
 						}
 					});
 				}
@@ -162,5 +177,10 @@ public class FlarestackTileEntity extends IPTileEntityBase implements ITickableT
 				markDirty();
 			}
 		}
+	}
+	
+	@Override
+	public boolean shouldPlaySound(String sound){
+		return true;
 	}
 }

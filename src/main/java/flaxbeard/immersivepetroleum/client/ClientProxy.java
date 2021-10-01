@@ -72,6 +72,7 @@ import net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.client.util.InputMappings;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.fluid.Fluid;
 import net.minecraft.inventory.container.Container;
@@ -82,6 +83,7 @@ import net.minecraft.tags.ITag.INamedTag;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.Hand;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.SoundEvent;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.vector.Quaternion;
 import net.minecraft.util.text.ITextComponent;
@@ -96,6 +98,7 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fluids.FluidStack;
+import net.minecraftforge.fml.DeferredWorkQueue;
 import net.minecraftforge.fml.client.registry.ClientRegistry;
 import net.minecraftforge.fml.client.registry.RenderingRegistry;
 import net.minecraftforge.fml.common.Mod;
@@ -128,10 +131,10 @@ public class ClientProxy extends CommonProxy{
 		ScreenManager.registerFactory(type, factory);
 	}
 	
+	@SuppressWarnings("deprecation")
 	@Override
 	public void completed(){
-		
-		ManualHelper.addConfigGetter(str -> {
+		DeferredWorkQueue.runLater(() -> ManualHelper.addConfigGetter(str -> {
 			switch(str){
 				case "distillationtower_operationcost":{
 					return Integer.valueOf((int) (2048 * IPServerConfig.REFINING.distillationTower_energyModifier.get()));
@@ -179,7 +182,7 @@ public class ClientProxy extends CommonProxy{
 				return cfg.get(str);
 			}
 			return null;
-		});
+		}));
 		
 		setupManualPages();
 	}
@@ -275,6 +278,16 @@ public class ClientProxy extends CommonProxy{
 	@Override
 	public PlayerEntity getClientPlayer(){
 		return Minecraft.getInstance().player;
+	}
+	
+	@Override
+	public void handleEntitySound(SoundEvent soundEvent, Entity entity, boolean active, float volume, float pitch){
+		// TODO Restore sound for the Motorboat
+	}
+	
+	@Override
+	public void handleTileSound(SoundEvent soundEvent, TileEntity te, boolean active, float volume, float pitch){
+		// TODO
 	}
 	
 	public void setupManualPages(){
