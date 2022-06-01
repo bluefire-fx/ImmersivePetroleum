@@ -21,6 +21,7 @@ import blusunrize.immersiveengineering.common.util.inventory.MultiFluidTank;
 import flaxbeard.immersivepetroleum.api.crafting.DistillationRecipe;
 import flaxbeard.immersivepetroleum.common.IPTileTypes;
 import flaxbeard.immersivepetroleum.common.multiblocks.DistillationTowerMultiblock;
+import flaxbeard.immersivepetroleum.common.util.FluidHelper;
 import net.minecraft.entity.item.ItemEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.inventory.ItemStackHelper;
@@ -142,34 +143,37 @@ public class DistillationTowerTileEntity extends PoweredMultiblockTileEntity<Dis
 		
 		checkForNeedlessTicking();
 		
-		if(this.world.isRemote || isDummy() || isRSDisabled()){
+		if(this.world.isRemote || isDummy()){
 			return;
 		}
 		
 		boolean update = false;
-		if(this.energyStorage.getEnergyStored() > 0 && this.processQueue.size() < getProcessQueueMaxLength()){
-			if(this.tanks[TANK_INPUT].getFluidAmount() > 0){
-				DistillationRecipe recipe = DistillationRecipe.findRecipe(this.tanks[TANK_INPUT].getFluid());
-				if(recipe != null && this.tanks[TANK_INPUT].getFluidAmount() >= recipe.getInputFluid().getAmount() && this.energyStorage.getEnergyStored() >= recipe.getTotalProcessEnergy()){
-					MultiblockProcessInMachine<DistillationRecipe> process = new MultiblockProcessInMachine<DistillationRecipe>(recipe).setInputTanks(TANK_INPUT);
-					if(addProcessToQueue(process, true)){
-						addProcessToQueue(process, false);
-						update = true;
+		
+		if(!isRSDisabled()){
+			if(this.energyStorage.getEnergyStored() > 0 && this.processQueue.size() < getProcessQueueMaxLength()){
+				if(this.tanks[TANK_INPUT].getFluidAmount() > 0){
+					DistillationRecipe recipe = DistillationRecipe.findRecipe(this.tanks[TANK_INPUT].getFluid());
+					if(recipe != null && this.tanks[TANK_INPUT].getFluidAmount() >= recipe.getInputFluid().getAmount() && this.energyStorage.getEnergyStored() >= recipe.getTotalProcessEnergy()){
+						MultiblockProcessInMachine<DistillationRecipe> process = new MultiblockProcessInMachine<DistillationRecipe>(recipe).setInputTanks(TANK_INPUT);
+						if(addProcessToQueue(process, true)){
+							addProcessToQueue(process, false);
+							update = true;
+						}
 					}
 				}
 			}
+			
+			if(!this.processQueue.isEmpty()){
+				this.wasActive = true;
+				this.cooldownTicks = 10;
+				update = true;
+			}else if(this.wasActive){
+				this.wasActive = false;
+				update = true;
+			}
+			
+			super.tick();
 		}
-		
-		if(!this.processQueue.isEmpty()){
-			this.wasActive = true;
-			this.cooldownTicks = 6;
-			update = true;
-		}else if(this.wasActive){
-			this.wasActive = false;
-			update = true;
-		}
-		
-		super.tick();
 		
 		if(this.inventory.get(INV_0) != ItemStack.EMPTY && this.tanks[TANK_INPUT].getFluidAmount() < this.tanks[TANK_INPUT].getCapacity()){
 			ItemStack emptyContainer = Utils.drainFluidContainer(this.tanks[TANK_INPUT], this.inventory.get(INV_0), this.inventory.get(INV_1));
@@ -223,18 +227,19 @@ public class DistillationTowerTileEntity extends PoweredMultiblockTileEntity<Dis
 				}
 			}
 			
-			update |= FluidUtil.getFluidHandler(this.world, getBlockPosForPos(Fluid_OUT).offset(getFacing().getOpposite()), getFacing()).map(output -> {
+			BlockPos outPos = getBlockPosForPos(Fluid_OUT).offset(getFacing().getOpposite());
+			update |= FluidUtil.getFluidHandler(this.world, outPos, getFacing()).map(output -> {
 				boolean ret = false;
 				if(this.tanks[TANK_OUTPUT].fluids.size() > 0){
 					List<FluidStack> toDrain = new ArrayList<>();
 					
 					// Tries to Output the output-fluids in parallel
 					for(FluidStack target:this.tanks[TANK_OUTPUT].fluids){
-						FluidStack outStack = Utils.copyFluidStackWithAmount(target, Math.min(target.getAmount(), 100), false);
+						FluidStack outStack = FluidHelper.copyFluid(target, Math.min(target.getAmount(), 1000));
 						
 						int accepted = output.fill(outStack, FluidAction.SIMULATE);
 						if(accepted > 0){
-							int drained = output.fill(Utils.copyFluidStackWithAmount(outStack, Math.min(outStack.getAmount(), accepted), false), FluidAction.EXECUTE);
+							int drained = output.fill(FluidHelper.copyFluid(outStack, Math.min(outStack.getAmount(), accepted)), FluidAction.EXECUTE);
 							
 							toDrain.add(new FluidStack(target.getFluid(), drained));
 							ret |= true;
@@ -320,7 +325,7 @@ public class DistillationTowerTileEntity extends PoweredMultiblockTileEntity<Dis
 	}
 	
 	@Override
-	public void doGraphicalUpdates(int slot){
+	public void doGraphicalUpdates(){
 		updateMasterBlock(null, true);
 	}
 	
@@ -385,7 +390,7 @@ public class DistillationTowerTileEntity extends PoweredMultiblockTileEntity<Dis
 			outputAmount += outputFluid.getAmount();
 		}
 
-		return (this.tanks[TANK_OUTPUT].getCapacity() >= this.tanks[TANK_OUTPUT].getFluidAmount() + outputAmount);
+		return this.tanks[TANK_OUTPUT].getCapacity() >= (this.tanks[TANK_OUTPUT].getFluidAmount() + outputAmount);
 	}
 	
 	@Override
@@ -449,8 +454,8 @@ public class DistillationTowerTileEntity extends PoweredMultiblockTileEntity<Dis
 	}
 	
 	@Override
-	public boolean shouldRenderAsActive(){
-		return this.cooldownTicks > 0 || super.shouldRenderAsActive();
+	public boolean shouldRenderAsActiveImpl(){
+		return this.cooldownTicks > 0 || super.shouldRenderAsActiveImpl();
 	}
 	
 	@Override

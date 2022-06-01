@@ -11,12 +11,14 @@ import com.google.common.collect.ImmutableSet;
 import blusunrize.immersiveengineering.api.IEEnums.IOSideConfig;
 import blusunrize.immersiveengineering.api.utils.shapes.CachedShapesWithTransform;
 import blusunrize.immersiveengineering.common.blocks.IEBlockInterfaces.IBlockBounds;
+import blusunrize.immersiveengineering.common.blocks.IEBlockInterfaces.IInteractionObjectIE;
 import blusunrize.immersiveengineering.common.blocks.generic.PoweredMultiblockTileEntity;
-import blusunrize.immersiveengineering.common.util.Utils;
 import flaxbeard.immersivepetroleum.api.crafting.SulfurRecoveryRecipe;
 import flaxbeard.immersivepetroleum.common.IPTileTypes;
 import flaxbeard.immersivepetroleum.common.multiblocks.HydroTreaterMultiblock;
+import flaxbeard.immersivepetroleum.common.util.FluidHelper;
 import net.minecraft.entity.item.ItemEntity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.CompoundNBT;
 import net.minecraft.tileentity.TileEntity;
@@ -37,11 +39,11 @@ import net.minecraftforge.items.CapabilityItemHandler;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.ItemHandlerHelper;
 
-public class HydrotreaterTileEntity extends PoweredMultiblockTileEntity<HydrotreaterTileEntity, SulfurRecoveryRecipe> implements IBlockBounds{
-	/** Input Fluid Tank A<br> */
+public class HydrotreaterTileEntity extends PoweredMultiblockTileEntity<HydrotreaterTileEntity, SulfurRecoveryRecipe> implements IInteractionObjectIE, IBlockBounds{
+	/** Primary Fluid Input Tank<br> */
 	public static final int TANK_INPUT_A = 0;
 	
-	/** Input Fluid Tank B<br> */
+	/** Secondary Fluid Input Tank<br> */
 	public static final int TANK_INPUT_B = 1;
 	
 	/** Output Fluid Tank<br> */
@@ -115,7 +117,7 @@ public class HydrotreaterTileEntity extends PoweredMultiblockTileEntity<Hydrotre
 	}
 	
 	@Override
-	public void doGraphicalUpdates(int slot){
+	public void doGraphicalUpdates(){
 		this.markDirty();
 		this.markContainingBlockForUpdate(null);
 	}
@@ -253,14 +255,15 @@ public class HydrotreaterTileEntity extends PoweredMultiblockTileEntity<Hydrotre
 		super.tick();
 		
 		if(this.tanks[TANK_OUTPUT].getFluidAmount() > 0){
-			update |= FluidUtil.getFluidHandler(this.world, getBlockPosForPos(Fluid_OUT).up(), Direction.DOWN).map(output -> {
+			BlockPos outPos = getBlockPosForPos(Fluid_OUT).up();
+			update |= FluidUtil.getFluidHandler(this.world, outPos, Direction.DOWN).map(output -> {
 				boolean ret = false;
 				FluidStack target = this.tanks[TANK_OUTPUT].getFluid();
-				target = Utils.copyFluidStackWithAmount(target, Math.min(target.getAmount(), 100), false);
+				target = FluidHelper.copyFluid(target, Math.min(target.getAmount(), 1000));
 				
 				int accepted = output.fill(target, FluidAction.SIMULATE);
 				if(accepted > 0){
-					int drained = output.fill(Utils.copyFluidStackWithAmount(target, Math.min(target.getAmount(), accepted), false), FluidAction.EXECUTE);
+					int drained = output.fill(FluidHelper.copyFluid(target, Math.min(target.getAmount(), accepted)), FluidAction.EXECUTE);
 					
 					this.tanks[TANK_OUTPUT].drain(new FluidStack(target.getFluid(), drained), FluidAction.EXECUTE);
 					ret |= true;
@@ -342,6 +345,16 @@ public class HydrotreaterTileEntity extends PoweredMultiblockTileEntity<Hydrotre
 	@Override
 	protected boolean canDrainTankFrom(int iTank, Direction side){
 		return false;
+	}
+	
+	@Override
+	public IInteractionObjectIE getGuiMaster(){
+		return master();
+	}
+	
+	@Override
+	public boolean canUseGui(PlayerEntity player){
+		return this.formed;
 	}
 	
 	private static CachedShapesWithTransform<BlockPos, Pair<Direction, Boolean>> SHAPES = CachedShapesWithTransform.createForMultiblock(HydrotreaterTileEntity::getShape);
